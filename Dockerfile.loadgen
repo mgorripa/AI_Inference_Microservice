@@ -1,0 +1,15 @@
+# syntax=docker/dockerfile:1
+FROM golang:1.22 AS build
+WORKDIR /src
+
+# copy the whole loadgen, then resolve deps
+COPY go-loadgen/ .
+RUN go mod tidy
+
+# build for linux/arm64 to match your buildx platform
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /bin/loadgen .
+
+FROM gcr.io/distroless/base-debian12
+COPY --from=build /bin/loadgen /bin/loadgen
+EXPOSE 9090
+ENTRYPOINT ["/bin/loadgen"]

@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-infer-service
+spec:
+  selector:
+    app: ai-infer-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-loadgen
+spec:
+  selector:
+    app: ai-loadgen
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090

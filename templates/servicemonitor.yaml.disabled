@@ -1,0 +1,11 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ai-infer-service
+spec:
+  selector:
+    matchLabels:
+      app: ai-infer-service
+  endpoints:
+    - port: http
+      path: /metrics

@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+FROM python:3.11-slim AS base
+
+# Keep /app as project root, not /app/service
+WORKDIR /app
+
+# System deps for wheels (pybind11, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps
+COPY service/requirements.txt ./service/requirements.txt
+RUN pip install --no-cache-dir -r service/requirements.txt
+
+# Optional: build the extension (ok to fail → CPU fallback)
+COPY service/kernels ./service/kernels
+RUN python -m pip install --no-cache-dir ./service/kernels || true
+
+# Copy the app code
+COPY service ./service
+
+# Make sure Python can import from /app (so 'service.app' works)
+ENV PYTHONPATH=/app
+
+EXPOSE 8080
+# run the package module, not bare app.py
+CMD ["python", "-m", "uvicorn", "service.app:app", "--host", "0.0.0.0", "--port", "8080"]
