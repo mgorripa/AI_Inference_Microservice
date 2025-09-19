@@ -1,4 +1,4 @@
-# AI Inference Microservice (Overnight Demo)
+# AI Inference Microservice
 
 A tiny, production-flavored inference microservice that exercises the following stack listed:
 **Python + PyTorch + FastAPI**, **C++/pybind11** (custom op), **Golang** load generator with **Prometheus** metrics, **Docker**, **Kubernetes**, and **Horizontal Pod Autoscaling (HPA)**. CUDA/Triton/CUTLASS/vLLM are stubbed with clear next steps and documented in the roadmap.
