@@ -1,89 +1,166 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai-infer-service
+  name: ai-infer
+  labels:
+    app: ai-infer
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: ai-infer-service }
+    matchLabels:
+      app: ai-infer
   template:
     metadata:
-      labels: { app: ai-infer-service }
+      labels:
+        app: ai-infer
     spec:
+      # Give in-flight requests time to finish during pod termination.
+      terminationGracePeriodSeconds: 30
       containers:
         - name: service
           image: ai-infer:latest
+          # Kind uses the image loaded from the laptop instead of pulling it.
           imagePullPolicy: IfNotPresent
-          ports: [{ containerPort: 8080 }]
-          readinessProbe:
-            httpGet: { path: /healthz, port: 8080 }
-            initialDelaySeconds: 3
-          livenessProbe:
-            httpGet: { path: /healthz, port: 8080 }
-            initialDelaySeconds: 10
+          ports:
+            - name: http
+              containerPort: 8080
           resources:
-            requests: { cpu: "10m", memory: "64Mi" }
-            limits:   { cpu: "500m", memory: "256Mi" }
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: ai-infer-service
+  labels:
+    app: ai-infer
 spec:
-  selector: { app: ai-infer-service }
+  selector:
+    app: ai-infer
   ports:
     - name: http
       port: 8080
-      targetPort: 8080
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ai-loadgen
-spec:
-  replicas: 1
-  selector:
-    matchLabels: { app: ai-loadgen }
-  template:
-    metadata:
-      labels: { app: ai-loadgen }
-    spec:
-      containers:
-        - name: loadgen
-          image: ai-loadgen:latest
-          imagePullPolicy: IfNotPresent
-          env:
-            - { name: SERVICE_URL, value: "http://ai-infer-service:8080" }
-            - { name: QPS, value: "200" }
-            - { name: CONCURRENCY, value: "60" }
-          ports: [{ containerPort: 9090 }]
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ai-loadgen
-spec:
-  selector: { app: ai-loadgen }
-  ports:
-    - name: http
-      port: 9090
-      targetPort: 9090
+      targetPort: http
+  type: ClusterIP
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: ai-infer-service
+  name: ai-infer
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: ai-infer-service
+    name: ai-infer
   minReplicas: 1
   maxReplicas: 5
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 2
+          periodSeconds: 15
+      selectPolicy: Max
+    scaleDown:
+      # Avoid rapidly removing pods as soon as traffic drops.
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 30
   metrics:
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 20
+          averageUtilization: 60
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-loadgen
+  labels:
+    app: ai-loadgen
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-loadgen
+  template:
+    metadata:
+      labels:
+        app: ai-loadgen
+    spec:
+      terminationGracePeriodSeconds: 15
+      containers:
+        - name: loadgen
+          image: ai-loadgen:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TARGET_URL
+              value: "http://ai-infer-service:8080/predict"
+            - name: QPS
+              value: "2"
+            - name: CONCURRENCY
+              value: "2"
+            - name: DURATION_SECONDS
+              value: "0"
+            - name: REQUEST_TIMEOUT_SECONDS
+              value: "5"
+          ports:
+            - name: metrics
+              containerPort: 9090
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "32Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-loadgen-metrics
+  labels:
+    app: ai-loadgen
+spec:
+  selector:
+    app: ai-loadgen
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+  type: ClusterIP
