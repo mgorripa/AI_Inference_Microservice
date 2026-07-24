@@ -22,20 +22,254 @@ A tiny, production-flavored inference microservice that exercises the following 
 ## Repo Structure (key files)
 
 ```
-.
-├─ service/
-│  ├─ app.py                 # FastAPI app (predict, kernel_demo, healthz)
-│  ├─ model.py               # Tiny MLP
-│  ├─ requirements.txt       # Runtime deps
-│  └─ kernels/               # pybind11 extension (CPU-only build path)
+AI_Inference_Microservice/
 │
-├─ go-loadgen/               # Go-based load generator (Prometheus metrics)
-├─ Dockerfile.service        # Service container (runs service.app:app)
-├─ Dockerfile.loadgen        # Loadgen container
-├─ k8s/ai-infer.yaml         # (Optional) Plain manifests for quick deploys
-├─ Chart.yaml, templates/, values.yaml  # (Optional) Helm chart at repo root
-├─ Makefile                  # (Optional) helpers
-└─ LICENSE                   # MIT
+├── .github/
+│   ├── dependabot.yml
+│   └── workflows/
+│       ├── ci.yml
+│       ├── docker.yml
+│       └── gpu-ci.yml
+│
+├── benchmarks/
+│   ├── __init__.py
+│   ├── README.md
+│   ├── common.py
+│   ├── benchmark_api.py
+│   ├── benchmark_model.py
+│   ├── benchmark_batching.py
+│   ├── benchmark_devices.py
+│   ├── benchmark_kernel.py
+│   ├── benchmark_quantization.py
+│   ├── analyze_results.py
+│   ├── schemas.py
+│   └── results/
+│       └── .gitkeep
+│
+├── configs/
+│   ├── development.env
+│   ├── production.env
+│   └── benchmark.env
+│
+├── docs/
+│   ├── architecture.md
+│   ├── benchmarking.md
+│   ├── deployment.md
+│   ├── design-decisions.md
+│   ├── gpu-roadmap.md
+│   └── images/
+│       └── architecture.svg
+│
+├── go-loadgen/
+│   ├── cmd/
+│   │   └── loadgen/
+│   │       └── main.go
+│   ├── internal/
+│   │   ├── client/
+│   │   │   ├── client.go
+│   │   │   └── client_test.go
+│   │   ├── config/
+│   │   │   ├── config.go
+│   │   │   └── config_test.go
+│   │   ├── load/
+│   │   │   ├── runner.go
+│   │   │   └── runner_test.go
+│   │   ├── metrics/
+│   │   │   └── metrics.go
+│   │   ├── payload/
+│   │   │   ├── generator.go
+│   │   │   └── generator_test.go
+│   │   └── report/
+│   │       ├── report.go
+│   │       └── report_test.go
+│   ├── go.mod
+│   ├── go.sum
+│   └── README.md
+│
+├── gpu/
+│   ├── README.md
+│   ├── cuda/
+│   │   ├── CMakeLists.txt
+│   │   ├── bindings.cpp
+│   │   ├── bias_gelu.cu
+│   │   ├── bias_gelu.cuh
+│   │   └── tests/
+│   │       └── test_cuda_kernel.py
+│   ├── triton/
+│   │   ├── __init__.py
+│   │   ├── bias_gelu.py
+│   │   └── test_bias_gelu.py
+│   └── cutlass/
+│       ├── README.md
+│       └── gemm_example.cu
+│
+├── k8s/
+│   ├── base/
+│   │   ├── configmap.yaml
+│   │   ├── deployment.yaml
+│   │   ├── hpa.yaml
+│   │   ├── service.yaml
+│   │   ├── serviceaccount.yaml
+│   │   └── kustomization.yaml
+│   ├── overlays/
+│   │   ├── local/
+│   │   │   ├── kustomization.yaml
+│   │   │   └── patch-local.yaml
+│   │   └── gpu/
+│   │       ├── kustomization.yaml
+│   │       └── patch-gpu.yaml
+│   └── monitoring/
+│       ├── servicemonitor.yaml
+│       └── prometheus-rules.yaml
+│
+├── profiling/
+│   ├── README.md
+│   ├── profile_model.py
+│   ├── profile_service.py
+│   ├── profile_batching.py
+│   └── traces/
+│       └── .gitkeep
+│
+├── scripts/
+│   ├── wait_for_service.sh
+│   ├── smoke_test.sh
+│   ├── run_benchmarks.sh
+│   ├── collect_system_info.py
+│   ├── create_kind_cluster.sh
+│   └── validate_results.py
+│
+├── service/
+│   ├── __init__.py
+│   ├── app.py
+│   ├── lifecycle.py
+│   │
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── dependencies.py
+│   │   ├── error_handlers.py
+│   │   ├── middleware.py
+│   │   └── routes/
+│   │       ├── __init__.py
+│   │       ├── health.py
+│   │       ├── inference.py
+│   │       ├── kernel.py
+│   │       ├── metadata.py
+│   │       └── metrics.py
+│   │
+│   ├── backends/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── registry.py
+│   │   ├── pytorch_backend.py
+│   │   ├── cpu_backend.py
+│   │   ├── mps_backend.py
+│   │   ├── cuda_backend.py
+│   │   └── quantized_cpu_backend.py
+│   │
+│   ├── batching/
+│   │   ├── __init__.py
+│   │   ├── batcher.py
+│   │   ├── policies.py
+│   │   ├── queue.py
+│   │   └── request_item.py
+│   │
+│   ├── config/
+│   │   ├── __init__.py
+│   │   └── settings.py
+│   │
+│   ├── kernels/
+│   │   ├── pyproject.toml
+│   │   ├── README.md
+│   │   ├── src/
+│   │   │   ├── bindings.cpp
+│   │   │   ├── relu.cpp
+│   │   │   ├── relu.hpp
+│   │   │   ├── bias_gelu.cpp
+│   │   │   └── bias_gelu.hpp
+│   │   └── tests/
+│   │       └── test_cpp_extension.py
+│   │
+│   ├── metrics/
+│   │   ├── __init__.py
+│   │   └── prometheus.py
+│   │
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── loader.py
+│   │   ├── metadata.py
+│   │   ├── schemas.py
+│   │   └── distilbert.py
+│   │
+│   ├── observability/
+│   │   ├── __init__.py
+│   │   ├── logging.py
+│   │   ├── request_context.py
+│   │   └── timing.py
+│   │
+│   ├── security/
+│   │   ├── __init__.py
+│   │   └── limits.py
+│   │
+│   └── utils/
+│       ├── __init__.py
+│       ├── device.py
+│       ├── json_safe.py
+│       └── system_info.py
+│
+├── tests/
+│   ├── conftest.py
+│   ├── integration/
+│   │   ├── test_api.py
+│   │   ├── test_batching_api.py
+│   │   ├── test_concurrency.py
+│   │   └── test_metrics.py
+│   ├── unit/
+│   │   ├── test_backends.py
+│   │   ├── test_batcher.py
+│   │   ├── test_config.py
+│   │   ├── test_device.py
+│   │   ├── test_error_handlers.py
+│   │   ├── test_json_safe.py
+│   │   ├── test_model.py
+│   │   └── test_schemas.py
+│   └── e2e/
+│       ├── test_docker.py
+│       └── test_kubernetes.py
+│
+├── charts/
+│   └── ai-infer/
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/
+│           ├── _helpers.tpl
+│           ├── configmap.yaml
+│           ├── deployment.yaml
+│           ├── hpa.yaml
+│           ├── service.yaml
+│           ├── serviceaccount.yaml
+│           └── servicemonitor.yaml
+│
+├── .dockerignore
+├── .editorconfig
+├── .env.example
+├── .gitignore
+├── .helmignore
+├── .pre-commit-config.yaml
+├── CHANGELOG.md
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── Dockerfile.loadgen
+├── Dockerfile.service
+├── LICENSE
+├── Makefile
+├── README.md
+├── RESULTS.md
+├── RUNBOOK.md
+├── SECURITY.md
+├── pyproject.toml
+├── requirements-dev.txt
+└── requirements.txt
 ```
 
 > You can re-create `k8s/ai-infer.yaml` from the **RUNBOOK.md** below.
