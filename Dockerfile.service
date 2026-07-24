@@ -1,27 +1,46 @@
 # syntax=docker/dockerfile:1
-FROM python:3.11-slim AS base
 
-# Keep /app as project root, not /app/service
+# Use one documented Python version locally and in the container.
+FROM python:3.11-slim
+
+# Prevent Python from writing .pyc files and force immediate log flushing.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
 WORKDIR /app
 
-# System deps for wheels (pybind11, etc.)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential git && rm -rf /var/lib/apt/lists/*
+# build-essential is required to compile the pybind11 C++ extension.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
+# Copy dependency metadata first so Docker can cache this layer.
 COPY service/requirements.txt ./service/requirements.txt
-RUN pip install --no-cache-dir -r service/requirements.txt
 
-# Optional: build the extension (ok to fail → CPU fallback)
+# Install the pinned runtime dependencies.
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && python -m pip install --no-cache-dir -r service/requirements.txt
+
+# Copy and compile the C++ extension.
+# There is intentionally no "|| true": a broken native build must fail visibly.
 COPY service/kernels ./service/kernels
-RUN python -m pip install --no-cache-dir ./service/kernels || true
+RUN python -m pip install --no-cache-dir ./service/kernels
 
-# Copy the app code
+# Copy the service only after dependencies are installed.
 COPY service ./service
 
-# Make sure Python can import from /app (so 'service.app' works)
-ENV PYTHONPATH=/app
-
+# The Kubernetes service and local Docker command use port 8080.
 EXPOSE 8080
-# run the package module, not bare app.py
-CMD ["python", "-m", "uvicorn", "service.app:app", "--host", "0.0.0.0", "--port", "8080"]
+
+# Use exec form so the process receives termination signals correctly.
+CMD [
+  "python",
+  "-m",
+  "uvicorn",
+  "service.app:app",
+  "--host",
+  "0.0.0.0",
+  "--port",
+  "8080"
+]
