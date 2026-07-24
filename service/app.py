@@ -8,7 +8,8 @@ from typing import Annotated
 import numpy as np
 import torch
 from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.responses import Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
