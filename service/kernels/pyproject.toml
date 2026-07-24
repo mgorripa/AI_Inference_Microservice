@@ -1,0 +1,10 @@
+# Packages required before setup.py can build the C++ extension.
+[build-system]
+requires = [
+    "setuptools>=68",
+    "wheel",
+    "pybind11==2.13.6"
+]
+
+# Tell pip to use setuptools to build the extension.
+build-backend = "setuptools.build_meta"
