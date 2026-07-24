@@ -64,7 +64,9 @@ def make_json_safe(value: object) -> object:
             return "Infinity"
 
         return "-Infinity"
-
+    if isinstance(value, BaseException):
+        return str(value)
+    
     if isinstance(value, dict):
         # Recursively sanitize every dictionary value.
         return {
