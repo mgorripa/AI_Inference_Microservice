@@ -47,6 +47,63 @@ app = FastAPI(
     description="CPU-based PyTorch inference service with a C++/NumPy ReLU demo.",
 )
 
+def make_json_safe(value: object) -> object:
+    """Recursively replace values that cannot be represented in valid JSON.
+
+    FastAPI validation errors may contain the original invalid input.
+    When that input is NaN or infinity, JSON serialization fails because
+    standard JSON does not support those floating-point values.
+    """
+
+    if isinstance(value, float) and not math.isfinite(value):
+        # Convert NaN and positive/negative infinity into readable strings.
+        if math.isnan(value):
+            return "NaN"
+
+        if value > 0:
+            return "Infinity"
+
+        return "-Infinity"
+
+    if isinstance(value, dict):
+        # Recursively sanitize every dictionary value.
+        return {
+            key: make_json_safe(item)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, list):
+        # Recursively sanitize every list item.
+        return [make_json_safe(item) for item in value]
+
+    if isinstance(value, tuple):
+        # JSON has arrays rather than tuples, so return a sanitized list.
+        return [make_json_safe(item) for item in value]
+
+    # Strings, integers, booleans and None are already JSON-safe.
+    return value
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(
+    _request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    """Return a JSON-safe HTTP 422 response for invalid request data.
+
+    This custom handler is needed because validation errors can contain
+    non-JSON values such as NaN or infinity in their original input field.
+    """
+
+    # exc.errors() contains the normal Pydantic validation-error structure.
+    # make_json_safe replaces only values JSON cannot serialize.
+    safe_errors = make_json_safe(exc.errors())
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": safe_errors,
+        },
+    )
 
 # -----------------------------
 # Prometheus metrics
@@ -174,6 +231,7 @@ class KernelOut(BaseModel):
 
     backend: str
     output: list[float]
+
 
 
 # -----------------------------
