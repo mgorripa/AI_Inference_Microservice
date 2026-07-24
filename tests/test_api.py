@@ -82,15 +82,49 @@ def test_predict_rejects_non_numeric_value() -> None:
 
 
 def test_predict_rejects_nan() -> None:
-    # JSON does not officially support NaN, so send raw content to exercise validation.
+    """NaN must produce a controlled validation response, not a server error."""
+
     response = client.post(
         "/predict",
-        content='{"x":[NaN,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]}',
-        headers={"content-type": "application/json"},
+        content=(
+            '{"x":['
+            'NaN,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15'
+            ']}'
+        ),
+        headers={
+            "content-type": "application/json",
+        },
     )
 
-    assert response.status_code in {400, 422}
+    # The custom RequestValidationError handler must return 422.
+    assert response.status_code == 422
 
+    body = response.json()
+
+    # Confirm that FastAPI returned structured validation details.
+    assert "detail" in body
+
+    # Most importantly, confirm the response was valid JSON and did not crash
+    # while attempting to serialize the original NaN value.
+    assert isinstance(body["detail"], list)
+
+def test_predict_rejects_infinity() -> None:
+    """Infinity must also produce a controlled validation response."""
+
+    response = client.post(
+        "/predict",
+        content=(
+            '{"x":['
+            'Infinity,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15'
+            ']}'
+        ),
+        headers={
+            "content-type": "application/json",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "detail" in response.json()
 
 def test_predict_rejects_extra_fields() -> None:
     response = client.post(
