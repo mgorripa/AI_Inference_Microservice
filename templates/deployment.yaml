@@ -1,39 +1,55 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai-infer-service
+  name: ai-infer
+  labels:
+    app: ai-infer
 spec:
   replicas: {{ .Values.service.replicas }}
   selector:
     matchLabels:
-      app: ai-infer-service
+      app: ai-infer
   template:
     metadata:
       labels:
-        app: ai-infer-service
+        app: ai-infer
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
         - name: service
-          image: {{ .Values.image.service }}
+          image: {{ .Values.image.service | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          resources:
+{{ toYaml .Values.service.resources | indent 12 }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: {{ .Values.service.probes.startup.failureThreshold }}
+            periodSeconds: {{ .Values.service.probes.startup.periodSeconds }}
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 8080
-            initialDelaySeconds: 3
+              port: http
+            initialDelaySeconds: {{ .Values.service.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.service.probes.readiness.periodSeconds }}
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8080
-            initialDelaySeconds: 10
-          resources:
-            {{- toYaml .Values.service.resources | nindent 12 }}
+              port: http
+            initialDelaySeconds: {{ .Values.service.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.service.probes.liveness.periodSeconds }}
+{{- if .Values.loadgen.enabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ai-loadgen
+  labels:
+    app: ai-loadgen
 spec:
   replicas: 1
   selector:
@@ -44,27 +60,25 @@ spec:
       labels:
         app: ai-loadgen
     spec:
+      terminationGracePeriodSeconds: 15
       containers:
         - name: loadgen
-          image: {{ .Values.image.loadgen }}
+          image: {{ .Values.image.loadgen | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            - name: SERVICE_URL
-              value: "http://ai-infer-service:8080"
+            - name: TARGET_URL
+              value: "http://ai-infer-service:{{ .Values.service.port }}/predict"
             - name: QPS
-              value: "{{ .Values.loadgen.qps }}"
+              value: {{ .Values.loadgen.qps | quote }}
             - name: CONCURRENCY
-              value: "{{ .Values.loadgen.concurrency }}"
+              value: {{ .Values.loadgen.concurrency | quote }}
+            - name: DURATION_SECONDS
+              value: {{ .Values.loadgen.durationSeconds | quote }}
+            - name: REQUEST_TIMEOUT_SECONDS
+              value: {{ .Values.loadgen.requestTimeoutSeconds | quote }}
           ports:
-            - containerPort: 9090
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ai-infer-service
-spec:
-  selector:
-    app: ai-infer-service
-  ports:
-    - name: http
-      port: 8080
-      targetPort: 8080
+            - name: metrics
+              containerPort: 9090
+          resources:
+{{ toYaml .Values.loadgen.resources | indent 12 }}
+{{- end }}
