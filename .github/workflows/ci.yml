@@ -45,9 +45,18 @@ jobs:
         run: |
           ruff check service tests
 
+      # - name: Run tests
+      #   run: |
+      #     pytest -q --cov=service --cov-report=term-missing
       - name: Run tests
+        env:
+          # Add the repository root to Python's module search path.
+          # This allows imports such as "from service.app import app".
+          PYTHONPATH: ${{ github.workspace }}
         run: |
-          pytest -q --cov=service --cov-report=term-missing
+          # Using "python -m pytest" ensures pytest uses the same Python
+          # environment in which the project dependencies were installed.
+          python -m pytest -q --cov=service --cov-report=term-missing
 
   go-build:
     name: Go load-generator build
