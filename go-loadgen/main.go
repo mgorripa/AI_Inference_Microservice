@@ -47,12 +47,12 @@ var (
 )
 
 type config struct {
-	targetURL       string
-	qps             int
-	concurrency     int
-	duration        time.Duration
-	requestTimeout  time.Duration
-	metricsAddress  string
+	targetURL      string
+	qps            int
+	concurrency    int
+	duration       time.Duration
+	requestTimeout time.Duration
+	metricsAddress string
 }
 
 type predictRequest struct {
