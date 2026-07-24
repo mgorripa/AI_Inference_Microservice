@@ -1,0 +1,46 @@
+# macOS
+.DS_Store
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging and native-extension output
+build/
+dist/
+*.egg-info/
+*.so
+*.dylib
+*.dll
+
+# Test coverage
+.coverage
+coverage.xml
+htmlcov/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local environment files
+.env
+.env.*
+
+# Helm output
+*.tgz
+
+# Local benchmark output
+results/*.json
+results/*.csv
+results/*.log
