@@ -34,13 +34,4 @@ COPY service ./service
 EXPOSE 8080
 
 # Use exec form so the process receives termination signals correctly.
-CMD [
-  "python",
-  "-m",
-  "uvicorn",
-  "service.app:app",
-  "--host",
-  "0.0.0.0",
-  "--port",
-  "8080"
-]
+CMD ["python", "-m", "uvicorn", "service.app:app", "--host", "0.0.0.0", "--port", "8080"]
